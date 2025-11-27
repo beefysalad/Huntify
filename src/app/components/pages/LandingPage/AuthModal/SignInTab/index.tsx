@@ -1,5 +1,5 @@
 import { TabsContent } from "@/components/ui/tabs";
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,9 @@ import { signInWithGoogle } from "@/src/lib/actions/auth";
 import { useForm } from "react-hook-form";
 import { loginSchema, TLoginSchema } from "@/src/app/constants/zod/auth/signin";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuthMutations } from "@/src/app/hooks/useAuthMutations";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 const SignInTab = () => {
   const form = useForm<TLoginSchema>({
@@ -17,9 +20,24 @@ const SignInTab = () => {
       password: "",
     },
   });
+  const { signInMutation } = useAuthMutations();
+  const router = useRouter();
+  const [formError, setFormError] = useState<string | null>(null);
+
   const onSubmit = async (values: TLoginSchema) => {
-    console.log(values);
+    try {
+      setFormError(null);
+      await signInMutation.mutateAsync(values);
+      router.replace("/dashboard");
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "Unable to sign in right now."
+      );
+    }
   };
+
+  const isSubmitting = signInMutation.isPending;
+
   return (
     <TabsContent value='signin' className='mt-6'>
       <motion.div
@@ -32,6 +50,11 @@ const SignInTab = () => {
           Sign in to continue tracking your job applications
         </p>
 
+        {formError && (
+          <div className='mb-4 p-3 bg-red-900/30 border border-red-500/50 text-red-300 rounded-lg text-sm'>
+            {formError}
+          </div>
+        )}
         {form.formState.errors.password && (
           <div className='mb-4 p-3 bg-red-900/30 border border-red-500/50 text-red-300 rounded-lg text-sm'>
             {form.formState.errors.password.message}
@@ -113,12 +136,19 @@ const SignInTab = () => {
 
           <Button
             type='submit'
-            // disabled={isLoading}
-            className='w-full bg-purple-600 hover:bg-purple-700 text-white'
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+            className='w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-60'
             size='lg'
           >
-            {/* {isLoading ? "Signing in..." : "Sign In"} */}
-            Sign in
+            {isSubmitting ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Signing in...
+              </>
+            ) : (
+              "Sign in"
+            )}
           </Button>
         </form>
 

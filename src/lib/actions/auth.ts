@@ -67,3 +67,37 @@ export async function signInWithCredentials(input: CredentialsInput) {
 export async function getUser() {
   return auth();
 }
+
+export async function setPasswordForCurrentUser(password: string) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("You must be signed in to set a password.");
+  }
+
+  const trimmedPassword = password.trim();
+
+  if (trimmedPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters long.");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { hashedPassword: true },
+  });
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (user.hashedPassword) {
+    throw new Error("Password already set for this account.");
+  }
+
+  const hashedPassword = await bcrypt.hash(trimmedPassword, 12);
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { hashedPassword },
+  });
+}

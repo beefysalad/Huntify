@@ -1,5 +1,5 @@
 import { TabsContent } from "@/components/ui/tabs";
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,9 @@ import {
   TRegisterSchema,
 } from "@/src/app/constants/zod/auth/signup";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuthMutations } from "@/src/app/hooks/useAuthMutations";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 const SignUpTab = () => {
   const form = useForm<TRegisterSchema>({
     resolver: zodResolver(registerSchema),
@@ -21,9 +24,33 @@ const SignUpTab = () => {
       password: "",
     },
   });
+  const { registerMutation, signInMutation } = useAuthMutations();
+  const router = useRouter();
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   const onSubmit = async (values: TRegisterSchema) => {
-    console.log(values);
+    try {
+      setFormError(null);
+      setSuccessMessage(null);
+      await registerMutation.mutateAsync(values);
+      setSuccessMessage("Account created! Redirecting...");
+      await signInMutation.mutateAsync({
+        email: values.email,
+        password: values.password,
+      });
+      router.replace("/dashboard");
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create account right now."
+      );
+    }
   };
+
+  const isSubmitting = registerMutation.isPending || signInMutation.isPending;
+
   return (
     <TabsContent value='signup' className='mt-6'>
       <motion.div
@@ -36,11 +63,16 @@ const SignUpTab = () => {
           Start tracking your job search journey today
         </p>
 
-        {/* {error && (
+        {formError && (
           <div className='mb-4 p-3 bg-red-900/30 border border-red-500/50 text-red-300 rounded-lg text-sm'>
-            {error}
+            {formError}
           </div>
-        )} */}
+        )}
+        {successMessage && (
+          <div className='mb-4 p-3 bg-green-900/30 border border-green-500/50 text-green-300 rounded-lg text-sm'>
+            {successMessage}
+          </div>
+        )}
 
         <form action={signInWithGoogle}>
           <Button
@@ -127,12 +159,19 @@ const SignUpTab = () => {
 
           <Button
             type='submit'
-            // disabled={isLoading}
-            className='w-full bg-purple-600 hover:bg-purple-700 text-white'
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+            className='w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-60'
             size='lg'
           >
-            {/* {isLoading ? "Creating account..." : "Create Account"} */}
-            Create Account
+            {isSubmitting ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Creating account...
+              </>
+            ) : (
+              "Create Account"
+            )}
           </Button>
         </form>
 

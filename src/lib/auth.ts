@@ -19,6 +19,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
     }),
     Credentials({
       name: "Credentials",
@@ -61,13 +62,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        const hasPassword =
+          typeof token.hasPassword === "boolean" ? token.hasPassword : false;
+        session.user.hasPassword = hasPassword;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.sub = user.id;
+        if ("hashedPassword" in user) {
+          token.hasPassword = Boolean(
+            (user as { hashedPassword?: string | null }).hashedPassword
+          );
+        } else if (user.email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email },
+            select: { hashedPassword: true },
+          });
+          token.hasPassword = !!dbUser?.hashedPassword;
+        }
+      } else if (token.sub && token.hasPassword === undefined) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { hashedPassword: true },
+        });
+        token.hasPassword = !!dbUser?.hashedPassword;
       }
+
+      if (trigger === "update" && typeof session?.hasPassword === "boolean") {
+        token.hasPassword = session.hasPassword;
+      }
+
       return token;
     },
   },
